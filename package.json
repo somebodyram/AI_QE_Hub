@@ -1,0 +1,59 @@
+{
+  "name": "ai-qe-execution-hub",
+  "description": "AI-assisted quality engineering and test execution platform.",
+  "version": "1.0.0",
+  "dependencies": {
+    "@cap-js/hana": "^2",
+    "@sap-cloud-sdk/http-client": "^4.5.1",
+    "@sap-cloud-sdk/util": "^4.5.1",
+    "@sap/cds": "^9",
+    "@sap/low-code-event-handler": "^1.2.5",
+    "@sap/xsenv": ">=3.3.2 <3.3.3",
+    "@sap/xssec": "^4.13.0",
+    "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
+    "hdb": "^2.27.1",
+    "multer": "^2.1.1",
+    "passport": "^0.7.0"
+  },
+  "devDependencies": {
+    "@cap-js/sqlite": "^2",
+    "@sap/dev-cap-tools": "^1.31.0"
+  },
+  "scripts": {
+    "start": "cds-serve",
+    "start-local": "npm run generate-entry-point && npm run cds-watch",
+    "generate-entry-point": "dev-cap-tools gen-entrypoint",
+    "cds-watch": "cds watch --open",
+    "watch-sharepointdemo1.myapplication": "cds watch --open sharepointdemo1.myapplication/webapp/index.html?sap-ui-xx-viewCache=false",
+    "watch-sharepointdemo1.custompageapp": "cds watch --open sharepointdemo1.custompageapp/webapp/index.html?sap-ui-xx-viewCache=false"
+  },
+  "private": true,
+  "cds": {
+    "requires": {
+      "db": {
+        "kind": "hana-cloud",
+        "[development]": {
+          "kind": "sqlite"
+        }
+      },
+      "[production]": {
+        "db": "hana",
+        "auth": "xsuaa"
+      },
+      "auth": {
+        "[development]": {
+          "kind": "dummy"
+        },
+        "[production]": {
+          "kind": "xsuaa"
+        }
+      }
+    }
+  },
+  "lcap": true,
+  "sapux": [
+    "app/sharepointdemo1.myapplication",
+    "app/sharepointdemo1.custompageapp"
+  ]
+}

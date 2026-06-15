@@ -1,0 +1,32 @@
+Starting CAP Project Generator...
+Using @sap/cds-dk [9.9.1] from /extbin/globals/bun/global/install/node_modules/@sap/cds-dk
+Using @sap/generator-cap-project [2.0.6] from [/extbin/globals/bun/global/install/node_modules/@sap/generator-cap-project]
+Using root path [/home/user/projects]
+
+Running in Lobby mode: {"projectName":"AI_QE_Hub-1781288602068","facets":["nodejs","hana","xsuaa"],"id":"us10.adobe-btp-sandbox.aiqehub"}
+
+
+Creating project with hana, nodejs, xsuaa
+
+Adding facet: nodejs
+Adding facet: xsuaa
+Adding facet: hana
+
+Successfully initialized CAP project
+Continue with: code AI_QE_Hub-1781288602068 
+
+
+Installing dependencies...
+
+added 115 packages, and audited 116 packages in 4s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+Finished installing dependencies
+
+Done setting up project AI_QE_Hub-1781288602068
+Project is ready to use
+

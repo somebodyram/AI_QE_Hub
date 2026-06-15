@@ -1,0 +1,80 @@
+{
+  "version": "1.38.0",
+  "tasks": [
+    {
+      "label": "kill-cds-processes",
+      "type": "shell",
+      "command": "pids=$(ps aux | grep -vE 'grep|bash' | grep 'cds.js' | awk '{print $2}'); if [ -n \"$pids\" ]; then kill $pids; fi",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      }
+    },
+    {
+      "label": "npm-install",
+      "type": "process",
+      "command": "npm",
+      "args": [
+        "install"
+      ],
+      "dependsOn": [
+        "kill-cds-processes"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "label": "BuildMDK",
+      "type": "shell",
+      "command": "if npm list @sap/mdk-tools --depth=0 > /dev/null 2>&1; then npx mdk build --target module --ui5 --recursive;fi",
+      "dependsOn": [
+        "npm-install"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "label": "PreLaunchTask for Run sharepointdemo1",
+      "type": "process",
+      "command": "npx",
+      "args": [
+        "dev-cap-tools",
+        "gen-entrypoint"
+      ],
+      "dependsOn": [
+        "BuildMDK"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "type": "dpt.ptdeploy",
+      "label": "Deploy sharepointdemo1",
+      "taskType": "Deploy"
+    },
+    {
+      "type": "dpt.ptdeploy",
+      "label": "Enable Discovery and Deploy sharepointdemo1",
+      "taskType": "Deploy",
+      "enableDiscovery": "true"
+    },
+    {
+      "type": "build.mta",
+      "label": "Build MTA: sharepointdemo1 - PT",
+      "taskType": "Build",
+      "projectPath": "/home/user/projects/sharepointdemo1",
+      "extensions": [],
+      "ui5theme": "sap_horizon",
+      "vendorDependency": false,
+      "buildCodeServicePlan": false,
+      "subdomain": ""
+    }
+  ]
+}

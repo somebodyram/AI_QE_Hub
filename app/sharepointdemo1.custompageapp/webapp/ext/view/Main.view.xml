@@ -1,0 +1,182 @@
+<mvc:View
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+  xmlns:u="sap.ui.unified"
+  xmlns:f="sap.f"
+  xmlns:core="sap.ui.core"
+  controllerName="sharepointdemo1.custompageapp.ext.view.Main">
+  
+  <f:DynamicPage
+    id="dynamicPage"
+    headerExpanded="true"
+    toggleHeaderOnTitleClick="false">
+
+    <f:title>
+      <f:DynamicPageTitle id="dynamicPageTitle">
+        <f:heading>
+          <HBox id="headingHBox" alignItems="Center">
+            <Image
+              id="logoImage"
+              src="./assets/logo.png"
+              height="50px"
+              width="auto"
+              class="sapUiTinyMarginEnd"
+              densityAware="false"/>
+            <Title id="pageTitle" text="AI-Assisted QE Execution Results" level="H3"/>
+          </HBox>
+        </f:heading>
+        <f:snappedHeading>
+          <HBox id="snappedHeadingHBox" alignItems="Center">
+            <Image
+              id="logoImageSnapped"
+              src="./assets/logo.png"
+              height="40px"
+              width="auto"
+              class="sapUiTinyMarginEnd"
+              densityAware="false"/>
+            <Title id="pageTitleSnapped" text="AI-Assisted QE Execution Results" level="H3"/>
+          </HBox>
+        </f:snappedHeading>
+        <f:actions>
+        <MenuButton id="btnLoadMenu" text="Load" type="Default"
+          icon="sap-icon://open-folder" buttonMode="Split" defaultAction=".onReadExcel">
+          <menu>
+            <Menu id="loadMenu">
+              <items>
+                <MenuItem id="menuReadExcel" text="Read Excel"
+                  icon="sap-icon://excel-attachment" press="onReadExcel"/>
+                <MenuItem id="menuFetchSharepoint" text="Fetch from SharePoint"
+                  icon="sap-icon://download-from-cloud" press=".onFetchSharepoint"/>
+              </items>
+            </Menu>
+          </menu>
+        </MenuButton>
+        <Button id="btnExecute" text="Execute" type="Emphasized"
+          icon="sap-icon://process" press="onProcessExcel"/>
+        <MenuButton id="btnExportMenu" text="Export" type="Accept"
+          icon="sap-icon://save" buttonMode="Split" defaultAction=".onUpdateLocalExcel">
+          <menu>
+            <Menu id="exportMenu">
+              <items>
+                <MenuItem id="menuUpdateLocal" text="Update back to Excel"
+                  icon="sap-icon://upload-to-cloud" press=".onUpdateLocalExcel"/>
+                <MenuItem id="menuSaveSharepoint" text="Save to SharePoint"
+                  icon="sap-icon://save" press=".onSaveToSharePoint"/>
+              </items>
+            </Menu>
+          </menu>
+        </MenuButton>
+      </f:actions>
+      </f:DynamicPageTitle>
+    </f:title>
+
+    <f:header>
+      <f:DynamicPageHeader id="dynamicPageHeader" pinnable="true">
+        <HBox id="headerHBox" alignItems="Center" class="sapUiSmallMarginBottom">
+          <u:FileUploader
+            id="excelUploader"
+            fileType="xlsx,xls"
+            placeholder="Choose Excel file (.xlsx / .xls)"
+            width="400px"
+            icon="sap-icon://attachment"
+            class="sapUiSmallMarginEnd"/>
+          <Input
+            id="sharepointUrlInput"
+            placeholder="Paste SharePoint Excel URL here..."
+            width="520px"
+            class="sapUiSmallMarginEnd"/>
+        </HBox>
+      </f:DynamicPageHeader>
+    </f:header>
+
+    <f:content>
+      <Table
+        id="resultTable"
+        items="{ path: 'excelModel>/', sorter: { path: 'sheet', descending: false, group: true } }"
+        mode="MultiSelect"
+        width="100%"
+        growing="true"
+        growingThreshold="20"
+        growingScrollToLoad="true"
+        sticky="ColumnHeaders,HeaderToolbar"
+        noDataText="No data — please upload an Excel file and click Read Excel."
+        alternateRowColors="true">
+
+        <headerToolbar>
+          <Toolbar id="tableToolbar">
+            <Title id="tableTitle" text="Results - " level="H3"/>
+            <Text id="rowCountText" text="{= ${excelModel>/}.length + ' rows found'}" class="sapUiSmallMarginEnd"/>
+            <ToolbarSpacer id="tableToolbarSpacer"/>
+            <Select id="statusFilter" change=".onStatusFilter" width="160px" class="sapUiSmallMarginEnd">
+            <items>
+              <core:Item id="filterAll"     key=""        text="All Statuses"/>
+              <core:Item id="filterPass"    key="PASS"    text="PASS"/>
+              <core:Item id="filterFail"    key="FAIL"    text="FAIL"/>
+              <core:Item id="filterPending" key="PENDING" text="PENDING"/>
+            </items>
+          </Select>
+          <SearchField id="searchField" width="25%" search=".onSearch" placeholder="Search Scenario or Order Number..." />
+          </Toolbar>
+        </headerToolbar>
+
+        <columns>
+          <!-- <Column id="colSheet" width="10%">
+            <Text id="txtColSheet" text="Sheet Name"/>
+          </Column> -->
+          <Column id="colRowNumber" width="5%" hAlign="Center">
+            <Text id="txtColRowNumber" text="Row No."/>
+          </Column>
+          <Column id="colScenario" width="20%">
+            <Text id="txtColScenario" text="Scenario"/>
+          </Column>
+          <Column id="colCountry" width="10%" hAlign="Center">
+            <Text id="txtColCountry" text="Country"/>
+          </Column>
+          <Column id="colActualResult" width="25%">
+            <Text id="txtColActualResult" text="Actual Result"/>
+          </Column>
+          <Column id="colOrderNumber" width="15%" hAlign="Center">
+            <Text id="txtColOrderNumber" text="Order Number"/>
+          </Column>
+          <Column id="colEccContract" width="10%" hAlign="Center">
+            <Text id="txtcolEccContract" text="ECC Contract"/>
+          </Column>
+          <Column id="colReason" width="10%" hAlign="Center">
+            <Text id="txtColReason" text="Reason"/>
+          </Column>
+          <Column id="colStatus" width="10%" hAlign="Center">
+            <Text id="txtColStatus" text="Status"/>
+          </Column>
+          <Column id="colRunStatus" width="10%" hAlign="Center">
+            <Text id="txtColRunStatus" text="Run Status"/>
+        </Column>
+        </columns>
+
+        <items>
+          <ColumnListItem id="rowItem" type="Active">
+            <cells>
+              <!-- <Text id="cellSheet" text="{excelModel>sheet}" wrapping="false"/> -->
+              <Text id="cellRowNumber" text="{excelModel>rowNumber}"/>
+              <Text id="cellScenario" text="{excelModel>scenario}" wrapping="true"/>
+              <ObjectStatus id="cellCountry" text="{excelModel>country}" state="Information"/>
+              <ExpandableText id="cellActualResult" text="{excelModel>actualResult}" maxCharacters="50" overflowMode="InPlace" />
+              <Text id="cellOrderNumber" text="{excelModel>orderNumber}" wrapping="false"/>
+              <Text id="cellEccContract" text="{excelModel>eccContract}" wrapping="false"/>
+              <!-- <Link id="cellReason" text="View Reason" press=".onPressReason" 
+                visible="{= ${excelModel>status} !== undefined &amp;&amp; ${excelModel>status} !== null &amp;&amp; ${excelModel>status} !== '' &amp;&amp; ${excelModel>reason} !== undefined &amp;&amp; ${excelModel>reason} !== null &amp;&amp; ${excelModel>reason} !== '' }"/> -->
+              <Button id="cellReason" text="Reason" icon="sap-icon://notes" type="Transparent" press=".onPressReason" 
+                visible="{= ${excelModel>status} !== undefined &amp;&amp; ${excelModel>status} !== null &amp;&amp; ${excelModel>status} !== '' }"/>
+              <ObjectStatus id="cellStatus" text="{excelModel>status}"
+                state="{= ${excelModel>status} === 'PASS' ? 'Success' : ${excelModel>status} === 'PENDING' ? 'Warning' : ${excelModel>status} === 'FAIL' ? 'Error' : 'None' }"
+                icon="{= ${excelModel>status} === 'PASS' ? 'sap-icon://sys-enter-2' : ${excelModel>status} === 'PENDING' ? 'sap-icon://alert' : ${excelModel>status} === 'FAIL' ? 'sap-icon://error' : '' }"/>
+              <Button id="cellRunStatus" text="Logs" icon="sap-icon://sys-monitor" type="Transparent" press=".onPressRunStatus" 
+                visible="{= ${excelModel>runStatus} !== undefined &amp;&amp; ${excelModel>runStatus} !== null &amp;&amp; ${excelModel>runStatus} !== '' }"/>
+            </cells>
+          </ColumnListItem>
+        </items>
+
+      </Table>
+    </f:content>
+
+  </f:DynamicPage>
+</mvc:View>

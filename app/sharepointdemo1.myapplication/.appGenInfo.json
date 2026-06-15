@@ -1,0 +1,26 @@
+{
+  "generationParameters": {
+    "generationDate": "Mon Apr 13 2026 06:10:46 GMT+0000 (Coordinated Universal Time)",
+    "generatorPlatform": "SAP Business Application Studio",
+    "serviceType": "Local CAP",
+    "metadataFilename": "",
+    "serviceUrl": "http://localhost:4004/service/empservice/",
+    "appName": "sharepointdemo1.myapplication",
+    "appTitle": "myapplication",
+    "appDescription": "My SAP application",
+    "appNamespace": "",
+    "ui5Theme": "sap_horizon",
+    "ui5Version": "1.120.13",
+    "showMockDataInfo": false,
+    "generatorVersion": "1.22.0",
+    "template": "List Report Page V4",
+    "generatorName": "SAP Fiori Application Generator",
+    "entityRelatedConfig": [
+      {
+        "type": "Main Entity",
+        "value": "empdata"
+      }
+    ],
+    "launchText": "To launch the generated app, start your CAP project:  and navigate to the following location in your browser:\n\nhttp://localhost:4004/sharepointdemo1.myapplication/webapp/index.html"
+  }
+}
