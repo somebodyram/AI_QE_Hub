@@ -388,6 +388,7 @@ cds.on("bootstrap", (app) => {
   /* ================= 2. SAVE TO HANA DB ================= */
   app.post("/excel/save", async (req, res) => {
     try {
+      // const action = row.action ? String(row.action) : 'INITIAL_PURCHASE';
       const rows = req.body;
       console.log("Received rows:", JSON.stringify(rows));
 
@@ -417,6 +418,7 @@ cds.on("bootstrap", (app) => {
         const fileName     = row.fileName     ? String(row.fileName)     : null;
         const sheet        = row.sheet        ? String(row.sheet)        : null;
         const rowNumber    = row.rowNumber    ? parseInt(row.rowNumber)  : 0;
+        const action       = row.action       ? String(row.action)       : 'INITIAL_PURCHASE';
         
         let status         = row.status       ? String(row.status)       : 'PENDING';
         let reason         = row.reason       ? String(row.reason)       : null; 
@@ -460,7 +462,8 @@ cds.on("bootstrap", (app) => {
                    "ACTUALRESULT" = ${actualResult ? `'${actualResult.replace(/'/g,"''")}'` : 'NULL'},
                    "ORDERNUMBER" = ${orderNumber ? `'${orderNumber.replace(/'/g,"''")}'` : 'NULL'},
                    "UPDATEDAT" = '${currentDateTime}',
-                   "ECC_CONTRACT" = ${eccContract ? `'${eccContract}'` : 'NULL'}
+                   "ECC_CONTRACT" = ${eccContract ? `'${eccContract}'` : 'NULL'},
+                   "Action" = '${action.replace(/'/g,"''")}'
                WHERE "FILENAME" = '${fileName.replace(/'/g,"''")}' 
                AND "SHEETNAME" = '${sheet.replace(/'/g,"''")}' 
                AND "ROWNUMBER" = ${rowNumber}`,
@@ -480,7 +483,7 @@ cds.on("bootstrap", (app) => {
           await new Promise((resolve, reject) => {
             client.exec(
               `INSERT INTO "TRNFRM_BTP_CONSCOMM"."EXCELDATA_TESTRESULTS"
-               ("ID","SCENARIO","COUNTRY","ACTUALRESULT","ORDERNUMBER","STATUS","SHEETNAME","ROWNUMBER","REASON","CREATEDAT","UPDATEDAT","ECC_CONTRACT","FILENAME")
+               ("ID","SCENARIO","COUNTRY","ACTUALRESULT","ORDERNUMBER","STATUS","SHEETNAME","ROWNUMBER","REASON","CREATEDAT","UPDATEDAT","ECC_CONTRACT","FILENAME", "Action")
                VALUES ('${finalId}',
                        ${scenario     ? `'${scenario.replace(/'/g,"''")}'`     : 'NULL'},
                        ${country      ? `'${country.replace(/'/g,"''")}'`      : 'NULL'},
@@ -493,7 +496,8 @@ cds.on("bootstrap", (app) => {
                        '${finalCreatedAt}',
                        '${currentDateTime}',
                        ${eccContract  ? `'${eccContract}'` : 'NULL'},
-                       ${fileName     ? `'${fileName.replace(/'/g,"''")}'`     : 'NULL'})`,
+                       ${fileName     ? `'${fileName.replace(/'/g,"''")}'`     : 'NULL'},
+                       '${action.replace(/'/g,"''")}')`,
               (err) => {
                 if (err) { console.error("Insert error:", err.message); reject(err); }
                 else { console.log("Inserted brand new record:", finalId); resolve(); }

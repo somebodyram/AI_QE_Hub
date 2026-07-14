@@ -124,6 +124,8 @@ sap.ui.define([
 
         aSelectedItems.forEach(function(oItem) {
             var oContext = oItem.getBindingContext("excelModel");
+            var oRowData = oContext.getObject();
+            oRowData.action = "INITIAL_PURCHASE";
             aSelectedData.push(oContext.getObject());
             aPaths.push(oContext.getPath()); // Example: saves "/4" or "/5"
         });
