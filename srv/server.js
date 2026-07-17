@@ -57,31 +57,52 @@ cds.on("bootstrap", (app) => {
       const cleanFileName = rawFileName.replace(/\.[^/.]+$/, "");
 
       workbook.worksheets.forEach(ws => {
+        const headerRow = ws.getRow(1);
+        let cols = { scenario: 2, country: null, actualResult: null };
+        headerRow.eachCell((cell, colNumber) => {
+          const headerName = String(cell.value || "").trim().toLowerCase();
+          if (headerName === "scenario") cols.scenario = colNumber;
+          if (headerName === "country") cols.country = colNumber;
+          if (headerName === "actual result") cols.actualResult = colNumber;
+        });
+
+        // --- ROW PROCESSING ---
         ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
           if (rowNumber <= 1) return; // skip header
-          const scenario = row.getCell(2).value ? String(row.getCell(2).value).trim().toLowerCase() : "";
-          const IP_KEYWORDS = ["initial purchase", "ip -", "ip-", "ip "]; 
           
+          const rawScenario = row.getCell(cols.scenario).value;
+          const scenario = rawScenario ? String(rawScenario).trim().toLowerCase() : "";
+
+          // You can add more keywords here in the future separated by commas (e.g., "VIP, Cancelled, Draft")
+          const IGNORE_TEXTS = "VIP"; 
+          const excludeList = IGNORE_TEXTS.split(',').map(s => s.trim().toLowerCase());
+          if (excludeList.some(kw => scenario.includes(kw))) return;
+
+          const IP_KEYWORDS = ["initial purchase", "ip -", "ip-", "ip "]; 
+          // , " cancel ", "cancellation"
           if (IP_KEYWORDS.some(kw => scenario.includes(kw))) {
-            const rawActualResult = row.getCell(7).value;
-            const actualResultText = rawActualResult
+            let actualResultText = null;
+          if (cols.actualResult) {
+            const rawActualResult = row.getCell(cols.actualResult).value;
+            actualResultText = rawActualResult
               ? (typeof rawActualResult === 'object' && rawActualResult.richText)
                 ? rawActualResult.richText.map(r => r.text).join('')
                 : (typeof rawActualResult === 'object' && rawActualResult.result !== undefined)
                   ? String(rawActualResult.result)
                   : String(rawActualResult)
               : null;
+          }
 
             result.push({
-              scenario:     row.getCell(2).value,
-              country:      row.getCell(4).value,
-              actualResult: actualResultText,
-              orderNumber:  extractOrderNumber(actualResultText),
-              eccContract:  extractEccContract(actualResultText), 
+              scenario:     row.getCell(cols.scenario).value, 
+            country:      cols.country ? row.getCell(cols.country).value : null,
+            actualResult: actualResultText,
+            orderNumber:  extractOrderNumber(actualResultText),
+            eccContract:  extractEccContract(actualResultText), 
               sheet:        ws.name,
               rowNumber:    rowNumber,
               fileName:     cleanFileName, 
-              runStatus:    "", // Isolated tracking columns
+              runStatus:    "", 
               sapDb:        "", 
               sourceData:   "", 
               sapOutbound:  ""  
@@ -248,29 +269,46 @@ cds.on("bootstrap", (app) => {
 
       const result = [];
       workbook.worksheets.forEach(ws => {
+        const headerRow = ws.getRow(1);
+        let cols = { scenario: 2, country: 4, actualResult: 7 };
+        headerRow.eachCell((cell, colNumber) => {
+          const headerName = String(cell.value || "").trim().toLowerCase();
+          if (headerName === "scenario") cols.scenario = colNumber;
+          if (headerName === "country") cols.country = colNumber;
+          if (headerName === "actual result") cols.actualResult = colNumber;
+        });
+
+        // --- ROW PROCESSING ---
         ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
           if (rowNumber <= 1) return;
-          const scenario = row.getCell(2).value ? String(row.getCell(2).value).trim() : "";
-          if (!IP_KEYWORDS.some(kw => scenario.toLowerCase().includes(kw))) return;
+          
+          const rawScenario = row.getCell(cols.scenario).value;
+          const scenario = rawScenario ? String(rawScenario).trim().toLowerCase() : "";
+          
+          if (!IP_KEYWORDS.some(kw => scenario.includes(kw))) return;
 
-          const raw = row.getCell(7).value;
-          const actualResultText = raw
-            ? (typeof raw === "object" && raw.richText)
-              ? raw.richText.map(r => r.text).join("")
-              : (typeof raw === "object" && raw.result !== undefined)
-                ? String(raw.result) : String(raw)
-            : null;
+          let actualResultText = null;
+          if (cols.actualResult) {
+            const rawActualResult = row.getCell(cols.actualResult).value;
+            actualResultText = rawActualResult
+              ? (typeof rawActualResult === 'object' && rawActualResult.richText)
+                ? rawActualResult.richText.map(r => r.text).join('')
+                : (typeof rawActualResult === 'object' && rawActualResult.result !== undefined)
+                  ? String(rawActualResult.result)
+                  : String(rawActualResult)
+              : null;
+          }
 
           result.push({
-            scenario:     scenario,
-            country:      row.getCell(4).value,
+            scenario:     row.getCell(cols.scenario).value, 
+            country:      cols.country ? row.getCell(cols.country).value : null,
             actualResult: actualResultText,
             orderNumber:  extractOrderNumber(actualResultText),
-            eccContract:  extractEccContract(actualResultText), 
+            eccContract:  extractEccContract(actualResultText),
             sheet:        ws.name,
             rowNumber:    rowNumber,
             fileName:     cleanFileName, 
-            runStatus:    "", // Isolated tracking columns
+            runStatus:    "", 
             sapDb:        "",            
             sourceData:   "",            
             sapOutbound:  "" 
