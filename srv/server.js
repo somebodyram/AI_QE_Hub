@@ -73,13 +73,12 @@ cds.on("bootstrap", (app) => {
           const rawScenario = row.getCell(cols.scenario).value;
           const scenario = rawScenario ? String(rawScenario).trim().toLowerCase() : "";
 
-          // You can add more keywords here in the future separated by commas (e.g., "VIP, Cancelled, Draft")
-          const IGNORE_TEXTS = "VIP"; 
+          const IGNORE_TEXTS = "VIP, change plan, switch plan"; 
           const excludeList = IGNORE_TEXTS.split(',').map(s => s.trim().toLowerCase());
           if (excludeList.some(kw => scenario.includes(kw))) return;
 
-          const IP_KEYWORDS = ["initial purchase", "ip -", "ip-", "ip "]; 
-          // , " cancel ", "cancellation"
+          const IP_KEYWORDS = ["initial purchase", "ip -", "ip-", "ip ", " cancel ", "cancellation"]; 
+          // 
           if (IP_KEYWORDS.some(kw => scenario.includes(kw))) {
             let actualResultText = null;
           if (cols.actualResult) {
@@ -93,11 +92,14 @@ cds.on("bootstrap", (app) => {
               : null;
           }
 
+          const extractedOrderNumber = extractOrderNumber(actualResultText);
+          if (!extractedOrderNumber) return;
+
             result.push({
               scenario:     row.getCell(cols.scenario).value, 
             country:      cols.country ? row.getCell(cols.country).value : null,
             actualResult: actualResultText,
-            orderNumber:  extractOrderNumber(actualResultText),
+            orderNumber:  extractedOrderNumber,
             eccContract:  extractEccContract(actualResultText), 
               sheet:        ws.name,
               rowNumber:    rowNumber,
@@ -298,12 +300,14 @@ cds.on("bootstrap", (app) => {
                   : String(rawActualResult)
               : null;
           }
+          const extractedOrderNumber = extractOrderNumber(actualResultText);
+          if (!extractedOrderNumber) return;
 
           result.push({
             scenario:     row.getCell(cols.scenario).value, 
             country:      cols.country ? row.getCell(cols.country).value : null,
             actualResult: actualResultText,
-            orderNumber:  extractOrderNumber(actualResultText),
+            orderNumber:  extractedOrderNumber,
             eccContract:  extractEccContract(actualResultText),
             sheet:        ws.name,
             rowNumber:    rowNumber,

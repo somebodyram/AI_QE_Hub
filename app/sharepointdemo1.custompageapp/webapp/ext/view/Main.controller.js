@@ -44,6 +44,11 @@ sap.ui.define([
         this._applyFilters();
       },
 
+      onSheetFilter: function (oEvent) {
+        this._sSheetKey = oEvent.getParameter("selectedItem").getKey();
+        this._applyFilters();
+      },
+
       _applyFilters: function () {
         var oBinding = this.byId("resultTable").getBinding("items");
         if (!oBinding) return;
@@ -63,7 +68,11 @@ sap.ui.define([
           aFilters.push(new Filter("status", FilterOperator.EQ, this._sStatusKey));
         }
 
-        var oBinding = this.byId("resultTable").getBinding("items");
+        if (this._sSheetKey) {
+          aFilters.push(new Filter("sheet", FilterOperator.EQ, this._sSheetKey));
+        }
+
+        // var oBinding = this.byId("resultTable").getBinding("items");
         // AND between status + search, each internally uses OR where needed
         oBinding.filter(aFilters.length ? [new Filter({ filters: aFilters, and: true })] : []);
       },
@@ -87,9 +96,8 @@ sap.ui.define([
         })
           .then(response => response.json())
           .then(data => {
-            this.getView()
-              .getModel("excelModel")
-              .setData(data);
+            this.getView().getModel("excelModel").setData(data);
+            this._updateSheetFilter(data);
 
             MessageBox.success(
               "Read Excel completed. Rows: " + data.length
@@ -278,6 +286,7 @@ sap.ui.define([
             return;
           }
           oView.getModel("excelModel").setData(resp.data);
+          this._updateSheetFilter(resp.data);
           MessageBox.success("Loaded " + resp.data.length + " row(s) from SharePoint.");
         })
         .catch(() => {
@@ -417,6 +426,33 @@ sap.ui.define([
 
 
       /* =========================================================== */
+      /* Helper: Populate Dynamic Sheet Dropdown                     */
+      /* =========================================================== */
+      _updateSheetFilter: function (aData) {
+        var oSelect = this.byId("sheetFilter");
+        oSelect.removeAllItems();
+        
+        // Add the default "All Sheets" option back
+        oSelect.addItem(new sap.ui.core.Item({ key: "", text: "All Sheets" }));
+
+        if (!aData || !aData.length) return;
+
+        // Find unique sheet names
+        var aUniqueSheets = [];
+        aData.forEach(function (row) {
+          if (row.sheet && aUniqueSheets.indexOf(row.sheet) === -1) {
+            aUniqueSheets.push(row.sheet);
+          }
+        });
+
+        // Add unique sheets to the dropdown
+        aUniqueSheets.forEach(function (sheetName) {
+          oSelect.addItem(new sap.ui.core.Item({ key: sheetName, text: sheetName }));
+        });
+      },
+
+
+      /* =========================================================== */
       /* Helper: Get selected file from FileUploader                 */
       /* =========================================================== */
       _getSelectedFile: function () {
@@ -436,6 +472,78 @@ sap.ui.define([
         }
 
         return oInput.files[0];
+      },
+
+    /* =========================================================== */
+      /* AI CHATBOT WIDGET                                           */
+      /* =========================================================== */
+      onOpenChatbot: function (oEvent) {
+        var oButton = oEvent.getSource();
+
+        // Create the popover lazily (only build it the first time it's clicked)
+        if (!this._oChatPopover) {
+            
+            // 1. The message feed container
+            this._oChatLog = new sap.m.VBox({
+                items: [
+                    new sap.m.MessageStrip({
+                        text: "Hi! I am your AI Assistant. How can I help you analyze these execution results?",
+                        type: "Information",
+                        showIcon: true
+                    }).addStyleClass("sapUiSmallMargin")
+                ]
+            });
+
+            // 2. The input field
+            var oChatInput = new sap.m.Input({
+                placeholder: "Ask me anything...",
+                width: "100%",
+                submit: function(oEvent) { 
+                  // TODO: Add logic here later to send message to your AI backend
+                  sap.m.MessageToast.show("Message sent to AI: " + oEvent.getParameter("value"));
+                  oEvent.getSource().setValue(""); // clear input
+                }
+            });
+
+            // 3. Assemble the Popover window
+            this._oChatPopover = new sap.m.Popover({
+                title: "QE Hub AI Assistant",
+                placement: "Top", // Opens upwards from the footer button
+                contentWidth: "350px",
+                contentHeight: "450px",
+                resizable: true,
+                content: [
+                    new sap.m.VBox({
+                        height: "100%",
+                        justifyContent: "SpaceBetween",
+                        items: [
+                            new sap.m.ScrollContainer({
+                                height: "380px",
+                                vertical: true,
+                                content: [this._oChatLog]
+                            }),
+                            new sap.m.Toolbar({
+                                content: [
+                                    oChatInput,
+                                    new sap.m.Button({
+                                        icon: "sap-icon://paper-plane",
+                                        type: "Emphasized",
+                                        press: function () {
+                                            oChatInput.fireSubmit({ value: oChatInput.getValue() });
+                                        }
+                                    })
+                                ]
+                            })
+                        ]
+                    })
+                ]
+            });
+            // Attach to view so it inherits models
+            this.getView().addDependent(this._oChatPopover);
+        }
+
+        // Open anchored to the button
+        this._oChatPopover.openBy(oButton);
       }
 
     }
