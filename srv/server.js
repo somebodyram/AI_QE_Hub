@@ -11,8 +11,17 @@ const upload = multer();
 // ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────
 function extractOrderNumber(text) {
   if (!text) return null;
-  // Matches patterns like AD10336000015CAR, AE09131300000CMX etc. (Strictly case-sensitive)
-  const match = String(text).match(/\b[A-Z]{2}\d{10,}[A-Z0-9]{0,5}\b/);
+  const strText = String(text);
+
+  // PRIORITY 1: Always hunt for the AB series (Cancellation) first
+  // If an AB number exists anywhere in the text, it grabs this one and stops.
+  const cancelMatch = strText.match(/\bAB\d{10,}[A-Z0-9]{0,5}\b/);
+  if (cancelMatch) {
+    return cancelMatch[0];
+  }
+
+  // PRIORITY 2: Fallback to the standard AD/AE series
+  const match = strText.match(/\b[A-Z]{2}\d{10,}[A-Z0-9]{0,5}\b/);
   return match ? match[0] : null;
 }
 
@@ -48,6 +57,7 @@ cds.on("bootstrap", (app) => {
   /* ================= 1. READ EXCEL (LOCAL UPLOAD) ================= */
   app.post("/excel/read", upload.single("file"), async (req, res) => {
     try {
+      const actionType = req.body.action || "INITIAL_PURCHASE";
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(req.file.buffer);
       const result = [];
@@ -73,12 +83,12 @@ cds.on("bootstrap", (app) => {
           const rawScenario = row.getCell(cols.scenario).value;
           const scenario = rawScenario ? String(rawScenario).trim().toLowerCase() : "";
 
-          const IGNORE_TEXTS = "VIP, change plan, switch plan"; 
+          const IGNORE_TEXTS = "VIP, 3ds, change plan, switch plan"; 
           const excludeList = IGNORE_TEXTS.split(',').map(s => s.trim().toLowerCase());
           if (excludeList.some(kw => scenario.includes(kw))) return;
 
-          const IP_KEYWORDS = ["initial purchase", "ip -", "ip-", "ip ", " cancel ", "cancellation"]; 
-          // 
+          const IP_KEYWORDS = ["initial purchase", "ip -", "ip-", "ip " , " cancel ", "cancellation"]; 
+          // , " cancel ", "cancellation"
           if (IP_KEYWORDS.some(kw => scenario.includes(kw))) {
             let actualResultText = null;
           if (cols.actualResult) {
@@ -213,6 +223,7 @@ cds.on("bootstrap", (app) => {
   // ─── Fetch Data from SharePoint ───────────────────────────────────────────────
   app.post("/sharepoint/data", async (req, res) => {
     try {
+      const actionType = req.body.action || "INITIAL_PURCHASE";
       const { sharepointUrl } = req.body;
       if (!sharepointUrl) {
         return res.status(400).json({ error: "sharepointUrl is required" });
@@ -300,7 +311,7 @@ cds.on("bootstrap", (app) => {
                   : String(rawActualResult)
               : null;
           }
-          const extractedOrderNumber = extractOrderNumber(actualResultText);
+          const extractedOrderNumber = extractOrderNumber(actualResultText, actionType);
           if (!extractedOrderNumber) return;
 
           result.push({

@@ -179,6 +179,76 @@ sap.ui.define([
       },
 
       /* =========================================================== */
+      /* REFRESH DATA (FETCH LATEST STATUSES FROM HANA)              */
+      /* =========================================================== */
+      onRefreshData: function () {
+        var oView = this.getView();
+        var oModel = oView.getModel("excelModel");
+        var aCurrentData = oModel.getData();
+
+        // Prevent fetching if the table is completely empty
+        if (!aCurrentData || aCurrentData.length === 0) {
+          MessageBox.information("No data to refresh. Please load a file first.");
+          return;
+        }
+
+        var oBtn = this.byId("btnRefresh");
+        oView.setBusy(true);
+        if (oBtn) oBtn.setEnabled(false);
+
+        // Fetch all recent records from your HANA DB endpoint
+        fetch("/excel/results", { method: "GET" })
+          .then(res => res.json())
+          .then(dbData => {
+            if (dbData.error) throw new Error(dbData.error);
+
+            // 1. Create a quick lookup map from the DB data for fast merging
+            // We use fileName + sheet + rowNumber to perfectly identify the exact row
+            var oDbMap = {};
+            dbData.forEach(function(dbRow) {
+              if (dbRow.fileName && dbRow.sheet && dbRow.rowNumber) {
+                var sKey = dbRow.fileName + "|" + dbRow.sheet + "|" + dbRow.rowNumber;
+                oDbMap[sKey] = dbRow;
+              }
+            });
+
+            // 2. Loop through the UI table and update rows that have newer DB data
+            var iUpdatedCount = 0;
+            aCurrentData.forEach(function(localRow) {
+              if (localRow.fileName && localRow.sheet && localRow.rowNumber) {
+                var sKey = localRow.fileName + "|" + localRow.sheet + "|" + localRow.rowNumber;
+                var dbMatch = oDbMap[sKey];
+                
+                // If this row exists in the database, overwrite the UI with the DB's latest status/logs
+                if (dbMatch) {
+                  localRow.status = dbMatch.status;
+                  localRow.reason = dbMatch.reason;
+                  localRow.runStatus = dbMatch.runStatus;
+                  localRow.id = dbMatch.id; // Sync the DB UUID
+                  iUpdatedCount++;
+                }
+              }
+            });
+
+            // 3. Force the table to re-render with the updated data
+            oModel.refresh(true);
+            
+            // Re-apply filters just in case statuses changed (e.g., PENDING to PASS)
+            this._applyFilters();
+
+            MessageBox.success("Refresh complete! " + iUpdatedCount + " row(s) synced with the database.");
+          })
+          .catch(err => {
+            console.error(err);
+            MessageBox.error("Failed to refresh data: " + err.message);
+          })
+          .finally(() => {
+            oView.setBusy(false);
+            if (oBtn) oBtn.setEnabled(true);
+          });
+      },
+
+      /* =========================================================== */
       /* 3. PRESS REASON                                           */
       /* =========================================================== */
       onPressReason: function (oEvent) {

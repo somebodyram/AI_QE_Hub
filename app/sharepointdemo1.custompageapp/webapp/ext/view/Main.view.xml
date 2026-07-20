@@ -51,6 +51,7 @@
             </Menu>
           </menu>
         </MenuButton>
+        
         <Button id="btnExecute" text="Execute" type="Emphasized"
           icon="sap-icon://process" press="onProcessExcel"/>
         <MenuButton id="btnExportMenu" text="Export" type="Accept"
@@ -66,6 +67,7 @@
             </Menu>
           </menu>
         </MenuButton>
+        <Button id="btnRefresh" type="Default" icon="sap-icon://refresh" press=".onRefreshData"/>
 
         <!-- <Button 
             id="btnChatbot" 
