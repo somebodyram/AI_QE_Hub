@@ -25,6 +25,24 @@ function extractOrderNumber(text) {
   return match ? match[0] : null;
 }
 
+function isInitialPurchaseSheet(sheetName) {
+  if (!sheetName) return false;
+  const name = String(sheetName).trim().toLowerCase();
+  return name.includes("initial purchase") || name.includes("ip -") || name.includes("ip-") || /\bip\b/.test(name);
+}
+
+// function getCellText(rawValue) {
+//   if (rawValue === null || rawValue === undefined) return null;
+//   if (typeof rawValue === "object") {
+//     if (rawValue.richText) return rawValue.richText.map(r => r.text).join("");
+//     if (rawValue.result !== undefined) return String(rawValue.result);
+//     if (rawValue.text !== undefined) return String(rawValue.text);       // hyperlink cell { text, hyperlink }
+//     if (rawValue.hyperlink !== undefined) return String(rawValue.hyperlink);
+//     return null; // unknown object shape — avoid leaking "[object Object]"
+//   }
+//   return String(rawValue);
+// }
+
 // Extract exactly 10 digits, ignoring emails and connected text
 function extractEccContract(text) {
   if (!text) return null;
@@ -34,13 +52,25 @@ function extractEccContract(text) {
   return match ? match[0] : null;
 }
 
-function resolveSharePointFileUrl(url) {
+function getCellText(rawValue) {
+  if (rawValue === null || rawValue === undefined) return null;
+  if (typeof rawValue === "object") {
+    if (rawValue.richText) return rawValue.richText.map(r => r.text).join("");
+    if (rawValue.result !== undefined) return String(rawValue.result);
+    if (rawValue.text !== undefined) return String(rawValue.text);
+    if (rawValue.hyperlink !== undefined) return String(rawValue.hyperlink);
+    return null;
+  }
+  return String(rawValue);
+}
+
+function resolveSharePointFileUrl(url, folderPathOverride) {
   try {
     const parsed = new URL(url);
     if (parsed.pathname.includes("/_layouts/")) {
       const fileName = parsed.searchParams.get("file");
       if (fileName) {
-        const folderPath = process.env.SP_FOLDER_PATH || "ABS - AI AGENT"; 
+        const folderPath = folderPathOverride || process.env.SP_FOLDER_PATH || "ABS - AI AGENT";
         return `${folderPath}/${fileName}`;
       }
     }
@@ -70,11 +100,13 @@ cds.on("bootstrap", (app) => {
         const headerRow = ws.getRow(1);
         let cols = { scenario: 2, country: null, actualResult: null };
         headerRow.eachCell((cell, colNumber) => {
-          const headerName = String(cell.value || "").trim().toLowerCase();
+          const headerName = (getCellText(cell.value) || "").trim().toLowerCase();
           if (headerName === "scenario") cols.scenario = colNumber;
           if (headerName === "country") cols.country = colNumber;
-          if (headerName === "actual result") cols.actualResult = colNumber;
+          if (["actual result", "adobe id", "result"].includes(headerName)) cols.actualResult = colNumber;
         });
+
+console.log(`[DEBUG] Sheet "${ws.name}" -> cols:`, cols);
 
         // --- ROW PROCESSING ---
         ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
@@ -88,21 +120,25 @@ cds.on("bootstrap", (app) => {
           if (excludeList.some(kw => scenario.includes(kw))) return;
 
           const IP_KEYWORDS = ["initial purchase", "ip -", "ip-", "ip " , " cancel ", "cancellation"]; 
-          // , " cancel ", "cancellation"
-          if (IP_KEYWORDS.some(kw => scenario.includes(kw))) {
+          const matchesKeyword = IP_KEYWORDS.some(kw => scenario.includes(kw));
+          const matchesSheet = isInitialPurchaseSheet(ws.name);
+          console.log(`[DEBUG-ROW] Sheet="${ws.name}" Row=${rowNumber} matchesKeyword=${matchesKeyword} matchesSheet=${matchesSheet}`);
+
+          if (matchesKeyword || matchesSheet) {
             let actualResultText = null;
           if (cols.actualResult) {
             const rawActualResult = row.getCell(cols.actualResult).value;
-            actualResultText = rawActualResult
-              ? (typeof rawActualResult === 'object' && rawActualResult.richText)
-                ? rawActualResult.richText.map(r => r.text).join('')
-                : (typeof rawActualResult === 'object' && rawActualResult.result !== undefined)
-                  ? String(rawActualResult.result)
-                  : String(rawActualResult)
-              : null;
+            actualResultText = getCellText(rawActualResult);
+              // ? (typeof rawActualResult === 'object' && rawActualResult.richText)
+              //   ? rawActualResult.richText.map(r => r.text).join('')
+              //   : (typeof rawActualResult === 'object' && rawActualResult.result !== undefined)
+              //     ? String(rawActualResult.result)
+              //     : String(rawActualResult)
+              // : null;
           }
 
           const extractedOrderNumber = extractOrderNumber(actualResultText);
+          console.log(`[DEBUG-ORDER] Sheet="${ws.name}" Row=${rowNumber} extractedOrderNumber=${extractedOrderNumber} actualResultText="${(actualResultText || "").substring(0, 60)}"`);
           if (!extractedOrderNumber) return;
 
             result.push({
@@ -220,6 +256,104 @@ cds.on("bootstrap", (app) => {
     throw new Error("No content returned from CData tool");
   }
 
+  // ─── Resolve SharePoint file path by unique document GUID ────────────────
+  // "sourcedoc" in a Doc.aspx link is SharePoint's UniqueId for that file.
+  // It doesn't change even if the file gets moved to a different folder,
+  // so we look up the real path instead of guessing it from env vars.
+
+  function extractSourceDocId(url) {
+    try {
+      const parsed = new URL(url);
+      const raw = parsed.searchParams.get("sourcedoc"); // e.g. "{A7EA4DE7-...}"
+      return raw ? raw.replace(/[{}]/g, "") : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Minimal CSV line parser — handles quoted fields that contain commas,
+  // since folder/file names like "ABS QA - Regression Agent, E2E" could
+  // theoretically contain a comma once quoted by the driver.
+  function parseCsvLine(line) {
+    const result = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (line[i + 1] === '"') { cur += '"'; i++; }
+          else inQuotes = false;
+        } else {
+          cur += ch;
+        }
+      } else {
+        if (ch === '"') inQuotes = true;
+        else if (ch === ",") { result.push(cur); cur = ""; }
+        else cur += ch;
+      }
+    }
+    result.push(cur);
+    return result.map(v => v.trim());
+  }
+
+  async function resolveRemoteFileByGuid(sourceDocId, library = "Shared Documents") {
+    const raw = await cdataTool("queryData", {
+      query: `SELECT Url FROM [${CATALOG}].[REST].[Files] WHERE Id = '${sourceDocId}'`
+    });
+
+    if (!raw) return null;
+
+    const lines = raw.trim().split("\n");
+    if (lines.length < 2) return null; // header only, no match found
+
+    const headers = parseCsvLine(lines[0]).map(h => h.toLowerCase());
+    const values = parseCsvLine(lines[1]);
+    const idx = headers.indexOf("url");
+    if (idx === -1) return null;
+
+    const fullUrl = values[idx];
+    // e.g. "https://adobe.sharepoint.com/sites/ess-commerce-india/Shared Documents/ABS QA - Regression Agent/E2E Sample Files/CMEINTAKE-2976 - Kakao Pay.xlsx"
+
+    // @RemoteFile must be relative to @Library ("Shared Documents"), so strip
+    // everything up to and including "<library>/"
+    const marker = `${library}/`;
+    const markerIdx = fullUrl.indexOf(marker);
+    if (markerIdx === -1) return null;
+
+    return decodeURIComponent(fullUrl.substring(markerIdx + marker.length));
+    // -> "ABS QA - Regression Agent/E2E Sample Files/CMEINTAKE-2976 - Kakao Pay.xlsx"
+  }
+
+  async function resolveSharePointFileUrl(url) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.pathname.includes("/_layouts/")) {
+        const sourceDocId = extractSourceDocId(url);
+        if (sourceDocId) {
+          try {
+            const resolved = await resolveRemoteFileByGuid(sourceDocId);
+            if (resolved) {
+              console.log("[SP/CData] Resolved via GUID lookup:", resolved);
+              return resolved;
+            }
+          } catch (lookupErr) {
+            console.warn("[SP/CData] GUID lookup failed, falling back:", lookupErr.message);
+          }
+        }
+        // Fallback: old folder-guess behavior (kept only as a safety net)
+        const fileName = parsed.searchParams.get("file");
+        if (fileName) {
+          const folderPath = process.env.SP_FOLDER_PATH || "ABS - AI AGENT";
+          return `${folderPath}/${fileName}`;
+        }
+      }
+      return url;
+    } catch {
+      return url;
+    }
+  }
+
   // ─── Fetch Data from SharePoint ───────────────────────────────────────────────
   app.post("/sharepoint/data", async (req, res) => {
     try {
@@ -229,7 +363,7 @@ cds.on("bootstrap", (app) => {
         return res.status(400).json({ error: "sharepointUrl is required" });
       }
 
-      const remoteFile = resolveSharePointFileUrl(sharepointUrl);
+      const remoteFile = await resolveSharePointFileUrl(sharepointUrl);
       console.log("[SP/CData] Resolved remote file:", remoteFile);
 
       // Extract file name from URL for DB
@@ -285,11 +419,11 @@ cds.on("bootstrap", (app) => {
         const headerRow = ws.getRow(1);
         let cols = { scenario: 2, country: 4, actualResult: 7 };
         headerRow.eachCell((cell, colNumber) => {
-          const headerName = String(cell.value || "").trim().toLowerCase();
-          if (headerName === "scenario") cols.scenario = colNumber;
-          if (headerName === "country") cols.country = colNumber;
-          if (headerName === "actual result") cols.actualResult = colNumber;
-        });
+        const headerName = (getCellText(cell.value) || "").trim().toLowerCase();
+        if (headerName === "scenario") cols.scenario = colNumber;
+        if (headerName === "country") cols.country = colNumber;
+        if (["actual result", "adobe id", "result"].includes(headerName)) cols.actualResult = colNumber;
+      });
 
         // --- ROW PROCESSING ---
         ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
@@ -298,18 +432,18 @@ cds.on("bootstrap", (app) => {
           const rawScenario = row.getCell(cols.scenario).value;
           const scenario = rawScenario ? String(rawScenario).trim().toLowerCase() : "";
           
-          if (!IP_KEYWORDS.some(kw => scenario.includes(kw))) return;
+          if (!IP_KEYWORDS.some(kw => scenario.includes(kw)) && !isInitialPurchaseSheet(ws.name)) return;
 
           let actualResultText = null;
           if (cols.actualResult) {
             const rawActualResult = row.getCell(cols.actualResult).value;
-            actualResultText = rawActualResult
-              ? (typeof rawActualResult === 'object' && rawActualResult.richText)
-                ? rawActualResult.richText.map(r => r.text).join('')
-                : (typeof rawActualResult === 'object' && rawActualResult.result !== undefined)
-                  ? String(rawActualResult.result)
-                  : String(rawActualResult)
-              : null;
+            actualResultText = getCellText(rawActualResult);
+              // ? (typeof rawActualResult === 'object' && rawActualResult.richText)
+              //   ? rawActualResult.richText.map(r => r.text).join('')
+              //   : (typeof rawActualResult === 'object' && rawActualResult.result !== undefined)
+              //     ? String(rawActualResult.result)
+              //     : String(rawActualResult)
+              // : null;
           }
           const extractedOrderNumber = extractOrderNumber(actualResultText, actionType);
           if (!extractedOrderNumber) return;
@@ -348,7 +482,7 @@ cds.on("bootstrap", (app) => {
         return res.status(400).json({ error: "sharepointUrl and updates are required" });
       }
 
-      const remoteFile = resolveSharePointFileUrl(sharepointUrl);
+      const remoteFile = await resolveSharePointFileUrl(sharepointUrl);
       console.log("[SP/Save] Writing back to:", remoteFile);
 
       await initCData();
@@ -422,9 +556,9 @@ cds.on("bootstrap", (app) => {
         schemaName:    "REST",
         procedureName: "UploadDocument",
         parameters: {
-          "@Library":    "Shared Documents",
-          "@RemoteFile": remoteFile,
-          "@FileData":   base64Out
+          "@Library":     "Shared Documents",
+          "@RelativeUrl": remoteFile,
+          "@FileData":    base64Out
         }
       });
 
@@ -663,5 +797,15 @@ cds.on("bootstrap", (app) => {
       res.status(500).json({ success: false, error: err.message });
     }
   });
+
+  // app.get("/cdata/test-resolve/:guid", async (req, res) => {
+  //   try {
+  //     await initCData();
+  //     const resolved = await resolveRemoteFileByGuid(req.params.guid);
+  //     res.json({ resolved });
+  //   } catch (err) {
+  //     res.status(500).json({ error: err.message });
+  //   }
+  // });
 
 });
