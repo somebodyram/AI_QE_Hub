@@ -64,21 +64,21 @@ function getCellText(rawValue) {
   return String(rawValue);
 }
 
-function resolveSharePointFileUrl(url, folderPathOverride) {
-  try {
-    const parsed = new URL(url);
-    if (parsed.pathname.includes("/_layouts/")) {
-      const fileName = parsed.searchParams.get("file");
-      if (fileName) {
-        const folderPath = folderPathOverride || process.env.SP_FOLDER_PATH || "ABS - AI AGENT";
-        return `${folderPath}/${fileName}`;
-      }
-    }
-    return url;
-  } catch {
-    return url;
-  }
-}
+// function resolveSharePointFileUrl(url, folderPathOverride) {
+//   try {
+//     const parsed = new URL(url);
+//     if (parsed.pathname.includes("/_layouts/")) {
+//       const fileName = parsed.searchParams.get("file");
+//       if (fileName) {
+//         const folderPath = folderPathOverride || process.env.SP_FOLDER_PATH || "ABS - AI AGENT";
+//         return `${folderPath}/${fileName}`;
+//       }
+//     }
+//     return url;
+//   } catch {
+//     return url;
+//   }
+// }
 
 cds.on("bootstrap", (app) => {
 
@@ -100,13 +100,13 @@ cds.on("bootstrap", (app) => {
         const headerRow = ws.getRow(1);
         let cols = { scenario: 2, country: null, actualResult: null };
         headerRow.eachCell((cell, colNumber) => {
-          const headerName = (getCellText(cell.value) || "").trim().toLowerCase();
-          if (headerName === "scenario") cols.scenario = colNumber;
-          if (headerName === "country") cols.country = colNumber;
-          if (["actual result", "adobe id", "result"].includes(headerName)) cols.actualResult = colNumber;
-        });
-
-console.log(`[DEBUG] Sheet "${ws.name}" -> cols:`, cols);
+        const headerName = (getCellText(cell.value) || "").trim().toLowerCase();
+        if (headerName === "scenario" && cols.scenario === 2) cols.scenario = colNumber;
+        if (headerName === "country" && !cols.country) cols.country = colNumber;
+        if (["actual result", "adobe id", "result"].includes(headerName) && !cols.actualResult) {
+          cols.actualResult = colNumber;
+        }
+      });
 
         // --- ROW PROCESSING ---
         ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
@@ -119,14 +119,18 @@ console.log(`[DEBUG] Sheet "${ws.name}" -> cols:`, cols);
           const excludeList = IGNORE_TEXTS.split(',').map(s => s.trim().toLowerCase());
           if (excludeList.some(kw => scenario.includes(kw))) return;
 
-          const IP_KEYWORDS = ["initial purchase", "ip -", "ip-", "ip " , " cancel ", "cancellation"]; 
+          const IP_KEYWORDS = ["initial purchase", "ip -", "ip-", "ip " , " cancel ", "cancellation", "cancel plan"]; 
           const matchesKeyword = IP_KEYWORDS.some(kw => scenario.includes(kw));
           const matchesSheet = isInitialPurchaseSheet(ws.name);
-          console.log(`[DEBUG-ROW] Sheet="${ws.name}" Row=${rowNumber} matchesKeyword=${matchesKeyword} matchesSheet=${matchesSheet}`);
 
           if (matchesKeyword || matchesSheet) {
             let actualResultText = null;
           if (cols.actualResult) {
+  //           if (ws.name.includes("TwP")) {
+  // headerRow.eachCell((cell, colNumber) => {
+  //   console.log(`[DEBUG-HEADERS] TwP col=${colNumber} value=`, JSON.stringify(getCellText(cell.value)));
+  // });
+// }
             const rawActualResult = row.getCell(cols.actualResult).value;
             actualResultText = getCellText(rawActualResult);
               // ? (typeof rawActualResult === 'object' && rawActualResult.richText)
@@ -138,11 +142,10 @@ console.log(`[DEBUG] Sheet "${ws.name}" -> cols:`, cols);
           }
 
           const extractedOrderNumber = extractOrderNumber(actualResultText);
-          console.log(`[DEBUG-ORDER] Sheet="${ws.name}" Row=${rowNumber} extractedOrderNumber=${extractedOrderNumber} actualResultText="${(actualResultText || "").substring(0, 60)}"`);
           if (!extractedOrderNumber) return;
 
             result.push({
-              scenario:     row.getCell(cols.scenario).value, 
+              scenario:     row.getCell(cols.scenario).value,
             country:      cols.country ? row.getCell(cols.country).value : null,
             actualResult: actualResultText,
             orderNumber:  extractedOrderNumber,
@@ -236,7 +239,7 @@ console.log(`[DEBUG] Sheet "${ws.name}" -> cols:`, cols);
   /* =========================================================== */
   /* SHAREPOINT INTEGRATION (CDATA)                              */
   /* =========================================================== */
-  const IP_KEYWORDS = ["initial purchase", "ip -", "ip-", "ip "];
+  const IP_KEYWORDS = ["initial purchase", "ip -", "ip-", "ip " , " cancel ", "cancellation", "cancel plan"];
   const CATALOG     = "ConsumerCommerce_SharePoint_ess_commerce_india";
 
   async function cdataTool(toolName, args) {
@@ -329,18 +332,6 @@ console.log(`[DEBUG] Sheet "${ws.name}" -> cols:`, cols);
     try {
       const parsed = new URL(url);
       if (parsed.pathname.includes("/_layouts/")) {
-        const sourceDocId = extractSourceDocId(url);
-        if (sourceDocId) {
-          try {
-            const resolved = await resolveRemoteFileByGuid(sourceDocId);
-            if (resolved) {
-              console.log("[SP/CData] Resolved via GUID lookup:", resolved);
-              return resolved;
-            }
-          } catch (lookupErr) {
-            console.warn("[SP/CData] GUID lookup failed, falling back:", lookupErr.message);
-          }
-        }
         // Fallback: old folder-guess behavior (kept only as a safety net)
         const fileName = parsed.searchParams.get("file");
         if (fileName) {
@@ -364,7 +355,6 @@ console.log(`[DEBUG] Sheet "${ws.name}" -> cols:`, cols);
       }
 
       const remoteFile = await resolveSharePointFileUrl(sharepointUrl);
-      console.log("[SP/CData] Resolved remote file:", remoteFile);
 
       // Extract file name from URL for DB
       let cleanFileName = "SharePoint_File";
@@ -417,12 +407,14 @@ console.log(`[DEBUG] Sheet "${ws.name}" -> cols:`, cols);
       const result = [];
       workbook.worksheets.forEach(ws => {
         const headerRow = ws.getRow(1);
-        let cols = { scenario: 2, country: 4, actualResult: 7 };
+        let cols = { scenario: 2, country: null, actualResult: null };
         headerRow.eachCell((cell, colNumber) => {
         const headerName = (getCellText(cell.value) || "").trim().toLowerCase();
-        if (headerName === "scenario") cols.scenario = colNumber;
-        if (headerName === "country") cols.country = colNumber;
-        if (["actual result", "adobe id", "result"].includes(headerName)) cols.actualResult = colNumber;
+        if (headerName === "scenario" && cols.scenario === 2) cols.scenario = colNumber;
+        if (headerName === "country" && !cols.country) cols.country = colNumber;
+        if (["actual result", "adobe id", "result"].includes(headerName) && !cols.actualResult) {
+          cols.actualResult = colNumber;
+        }
       });
 
         // --- ROW PROCESSING ---
@@ -431,6 +423,10 @@ console.log(`[DEBUG] Sheet "${ws.name}" -> cols:`, cols);
           
           const rawScenario = row.getCell(cols.scenario).value;
           const scenario = rawScenario ? String(rawScenario).trim().toLowerCase() : "";
+
+          const IGNORE_TEXTS = "VIP, 3ds, change plan, switch plan"; 
+          const excludeList = IGNORE_TEXTS.split(',').map(s => s.trim().toLowerCase());
+          if (excludeList.some(kw => scenario.includes(kw))) return;
           
           if (!IP_KEYWORDS.some(kw => scenario.includes(kw)) && !isInitialPurchaseSheet(ws.name)) return;
 
@@ -445,7 +441,7 @@ console.log(`[DEBUG] Sheet "${ws.name}" -> cols:`, cols);
               //     : String(rawActualResult)
               // : null;
           }
-          const extractedOrderNumber = extractOrderNumber(actualResultText, actionType);
+          const extractedOrderNumber = extractOrderNumber(actualResultText);
           if (!extractedOrderNumber) return;
 
           result.push({

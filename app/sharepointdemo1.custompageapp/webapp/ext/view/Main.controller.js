@@ -7,6 +7,14 @@ sap.ui.define([
 ], function (Controller, MessageBox, JSONModel, Filter, FilterOperator) {
   "use strict";
 
+  function determineAction(scenario) {
+  const s = (scenario || "").toString().trim().toLowerCase();
+  const isCancel = /cancel/.test(s);
+  return isCancel ? "CANCEL_PLAN" : "INITIAL_PURCHASE";
+  // const CANCEL_KEYWORDS = [" cancel ", "cancellation", "cancel plan"];
+  // return CANCEL_KEYWORDS.some(kw => s.includes(kw)) ? "Cancellation" : "INITIAL_PURCHASE";
+}
+
   return Controller.extend(
     "sharepointdemo1.custompageapp.ext.view.Main",
     {
@@ -131,12 +139,12 @@ sap.ui.define([
         const aPaths = []; 
 
         aSelectedItems.forEach(function(oItem) {
-            var oContext = oItem.getBindingContext("excelModel");
-            var oRowData = oContext.getObject();
-            oRowData.action = "INITIAL_PURCHASE";
-            aSelectedData.push(oContext.getObject());
-            aPaths.push(oContext.getPath()); // Example: saves "/4" or "/5"
-        });
+        var oContext = oItem.getBindingContext("excelModel");
+        var oRowData = oContext.getObject();
+        oRowData.action = determineAction(oRowData.scenario);
+        aSelectedData.push(oContext.getObject());
+        aPaths.push(oContext.getPath());
+    });
 
         fetch("/excel/save", {
           method: "POST",
